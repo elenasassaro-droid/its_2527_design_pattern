@@ -2,12 +2,15 @@ import { Injectable } from '@nestjs/common';
 import { EventsRepository } from '../data/events.repository';
 import type { EventRecord } from '../data/types';
 import { VenuesRepository } from '../data/venues.repository';
+import { OrderPricer } from '../pricing/order-pricer';
+import { PricingRuleRegistry } from '../pricing/pricing-rules-registry';
 
 @Injectable()
 export class EventsService {
   constructor(
     private readonly events: EventsRepository,
-    private readonly venues: VenuesRepository,  
+    private readonly venues: VenuesRepository,
+    private readonly ruleRegistry: PricingRuleRegistry
   ) {}
 
   listOnSale(): EventRecord[] {
@@ -16,18 +19,8 @@ export class EventsService {
 
   // prezzo "a partire da" mostrato in vetrina, commissione inclusa
   priceFrom(event: EventRecord): string {
-    let min = 0;
-    switch (event.pricingType) {
-      case 'standard':
-        min = Math.min(...Object.values(event.sectorPrices));
-        break;
-      case 'flat':
-        min = event.flatPrice ?? 0;
-        break;
-      case 'free':
-        min = 0;
-        break;
-    }
-    return (min * 1.12).toFixed(2);
+    const venue = this.venues.findById(event.venueId)!;
+    const rule = this.ruleRegistry.forEvent(event);
+    return new OrderPricer(rule).priceFrom(event, venue.seats);
   }
 }
